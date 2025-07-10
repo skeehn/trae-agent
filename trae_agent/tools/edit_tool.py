@@ -135,7 +135,7 @@ Notes for using the `str_replace` command:
                         error="Parameter `file_text` is required and must be a string for command: create",
                         error_code=-1,
                     )
-                self.write_file(_path, file_text)
+                await self.write_file(_path, file_text)
                 return ToolExecResult(output=f"File created successfully at: {_path}")
             elif command == "str_replace":
                 old_str = arguments.get("old_str") if "old_str" in arguments else None
@@ -150,7 +150,7 @@ Notes for using the `str_replace` command:
                         error="Parameter `new_str` should be a string or null for command: str_replace",
                         error_code=-1,
                     )
-                return self.str_replace(_path, old_str, new_str)
+                return await self.str_replace(_path, old_str, new_str)
             elif command == "insert":
                 insert_line = arguments.get("insert_line") if "insert_line" in arguments else None
                 if not isinstance(insert_line, int):
@@ -164,7 +164,7 @@ Notes for using the `str_replace` command:
                         error="Parameter `new_str` is required for command: insert",
                         error_code=-1,
                     )
-                return self.insert(_path, insert_line, new_str_to_insert)
+                return await self.insert(_path, insert_line, new_str_to_insert)
             else:
                 return ToolExecResult(
                     error=f"Unrecognized command {command}. The allowed commands for the {self.name} tool are: {', '.join(EditToolSubCommands)}",
@@ -206,7 +206,7 @@ Notes for using the `str_replace` command:
                 stdout = f"Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}\n"
             return ToolExecResult(error_code=return_code, output=stdout, error=stderr)
 
-        file_content = self.read_file(path)
+        file_content = await self.read_file(path)
         init_line = 1
         if view_range:
             if len(view_range) != 2 or not all(isinstance(i, int) for i in view_range):  # pyright: ignore[reportUnnecessaryIsInstance]
@@ -236,10 +236,10 @@ Notes for using the `str_replace` command:
             output=self._make_output(file_content, str(path), init_line=init_line)
         )
 
-    def str_replace(self, path: Path, old_str: str, new_str: str | None) -> ToolExecResult:
+    async def str_replace(self, path: Path, old_str: str, new_str: str | None) -> ToolExecResult:
         """Implement the str_replace command, which replaces old_str with new_str in the file content"""
         # Read the file content
-        file_content = self.read_file(path).expandtabs()
+        file_content = (await self.read_file(path)).expandtabs()
         old_str = old_str.expandtabs()
         new_str = new_str.expandtabs() if new_str is not None else ""
 
@@ -260,7 +260,7 @@ Notes for using the `str_replace` command:
         new_file_content = file_content.replace(old_str, new_str)
 
         # Write the new content to the file
-        self.write_file(path, new_file_content)
+        await self.write_file(path, new_file_content)
 
         # Create a snippet of the edited section
         replacement_line = file_content.split(old_str)[0].count("\n")
@@ -277,9 +277,9 @@ Notes for using the `str_replace` command:
             output=success_msg,
         )
 
-    def insert(self, path: Path, insert_line: int, new_str: str) -> ToolExecResult:
+    async def insert(self, path: Path, insert_line: int, new_str: str) -> ToolExecResult:
         """Implement the insert command, which inserts new_str at the specified line in the file content."""
-        file_text = self.read_file(path).expandtabs()
+        file_text = (await self.read_file(path)).expandtabs()
         new_str = new_str.expandtabs()
         file_text_lines = file_text.split("\n")
         n_lines_file = len(file_text_lines)
@@ -302,7 +302,7 @@ Notes for using the `str_replace` command:
         new_file_text = "\n".join(new_file_text_lines)
         snippet = "\n".join(snippet_lines)
 
-        self.write_file(path, new_file_text)
+        await self.write_file(path, new_file_text)
 
         success_msg = f"The file {path} has been edited. "
         success_msg += self._make_output(
@@ -317,17 +317,21 @@ Notes for using the `str_replace` command:
 
     # Note: undo_edit method is not implemented in this version as it was removed
 
-    def read_file(self, path: Path):
+    async def read_file(self, path: Path) -> str:
         """Read the content of a file from a given path; raise a ToolError if an error occurs."""
         try:
-            return path.read_text()
+            # Use asyncio.to_thread to run synchronous I/O in a thread pool
+            import asyncio
+            return await asyncio.to_thread(path.read_text)
         except Exception as e:
             raise ToolError(f"Ran into {e} while trying to read {path}") from None
 
-    def write_file(self, path: Path, file: str):
+    async def write_file(self, path: Path, file: str) -> None:
         """Write the content of a file to a given path; raise a ToolError if an error occurs."""
         try:
-            _ = path.write_text(file)
+            # Use asyncio.to_thread to run synchronous I/O in a thread pool
+            import asyncio
+            await asyncio.to_thread(path.write_text, file)
         except Exception as e:
             raise ToolError(f"Ran into {e} while trying to write to {path}") from None
 
