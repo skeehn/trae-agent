@@ -83,7 +83,7 @@ class Config:
                     temperature=0.5,
                     top_p=1,
                     top_k=0,
-                    parallel_tool_calls=False,
+                    parallel_tool_calls=True,
                     max_retries=10,
                 ),
             }
